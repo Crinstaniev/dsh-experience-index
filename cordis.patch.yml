@@ -1,0 +1,7 @@
+# Bundle patch for dsh-experience-index. The profile loader inserts this row after
+# the baseline bundles; every field below can be overridden by the profile's
+# cordis.patch.yml without editing this package.
+- insert:
+    - id: dsh-experience-index
+      name: dsh-experience-index
+      config: {}

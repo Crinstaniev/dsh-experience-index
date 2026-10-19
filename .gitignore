@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output (the plugin is compiled from src/ before install)
+lib/
+
+# Local noise
+*.log
+.DS_Store
+coverage/
+.env
+.env.*
+!.env.example
