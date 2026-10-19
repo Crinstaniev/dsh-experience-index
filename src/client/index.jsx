@@ -333,7 +333,7 @@ export function apply(ctx) {
     ctx.slots.register(
       {
         name: 'conversation.input.right',
-        id: 'experience-index',
+        id: 'experience-index-trigger',
         order: 50,
       },
       Trigger,
