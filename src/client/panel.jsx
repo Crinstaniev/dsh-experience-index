@@ -5,6 +5,10 @@
  * two things worth doing without leaving the conversation: seeing the summary and
  * (re)indexing a directory. Destructive operations stay on the settings page.
  *
+ * The panel is session-scoped: the host resolves `sessionId` to the workspace
+ * that owns the open conversation, so switching conversations switches the
+ * "current directory" instead of pinning the most recently touched one.
+ *
  * A native `<dialog>` is used deliberately: it gives a modal backdrop and Escape
  * handling without depending on the host's UI primitives or on the composer's
  * overflow context.
@@ -24,7 +28,7 @@ const CATEGORY_LABEL = {
 }
 const CATEGORY_ORDER = ['rule', 'runbook', 'design', 'analysis', 'note', 'state', 'log']
 
-const formatTime = value => (value ? new Date(value).toLocaleDateString('zh-CN') : '—')
+const formatDate = value => (value ? new Date(value).toLocaleDateString('zh-CN') : '—')
 
 const tailOf = path => {
   if (!path) return ''
@@ -41,8 +45,9 @@ const summaryOf = stats => {
   return parts.join(' · ')
 }
 
-async function readState() {
-  const response = await fetch(`${API}/state`)
+async function readState(sessionId) {
+  const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''
+  const response = await fetch(`${API}/state${query}`)
   if (!response.ok) throw new Error(`读取失败（HTTP ${response.status}）`)
   return response.json()
 }
@@ -65,9 +70,19 @@ export function StatusBadge({ scope }) {
   return <span className="ei-badge ei-badge-ok">已索引</span>
 }
 
-export function ExperiencePanel({ open, onClose }) {
+function Stat({ value, label, tone }) {
+  return (
+    <div className={`ei-stat${tone ? ` ei-stat--${tone}` : ''}`}>
+      <span className="ei-stat-value">{value}</span>
+      <span className="ei-stat-label">{label}</span>
+    </div>
+  )
+}
+
+export function ExperiencePanel({ open, onClose, sessionId }) {
   const dialog = useRef(null)
   const [state, setState] = useState(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
 
@@ -79,19 +94,23 @@ export function ExperiencePanel({ open, onClose }) {
   }, [open])
 
   const refresh = useCallback(async () => {
+    setLoading(true)
     try {
-      setState(await readState())
+      setState(await readState(sessionId))
       setError('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setLoading(false)
     }
-  }, [])
+  }, [sessionId])
 
+  // Refetch on open and whenever the conversation changes underneath the panel.
   useEffect(() => {
     if (open) void refresh()
   }, [open, refresh])
 
-  const run = async (action, root) => {
+  const run = async root => {
     setBusy(root)
     setError('')
     try {
@@ -109,85 +128,113 @@ export function ExperiencePanel({ open, onClose }) {
   const currentScope = scopes.find(scope => scope.root === currentRoot) ?? null
   const staleCount = scopes.filter(scope => scope.stale).length
   const totalEntries = scopes.reduce((sum, scope) => sum + scope.stats.total, 0)
-  const visible = scopes.slice(0, 6)
+  const visible = scopes.slice(0, 5)
 
   return (
     <dialog
       ref={dialog}
-      className="ei-dialog"
+      className="ei-panel"
       onClose={onClose}
       onClick={event => {
         // A click on the backdrop targets the dialog element itself.
         if (event.target === dialog.current) onClose()
       }}
     >
-      <div className="ei-dialog-inner">
-        <header className="ei-dialog-head">
-          <div>
+      <div className="ei-panel-body">
+        <header className="ei-panel-head">
+          <span className="ei-panel-mark" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+              <circle cx="8" cy="8" r="6.1" />
+              <path d="M10.3 5.7 8.9 8.9 5.7 10.3 7.1 7.1z" />
+            </svg>
+          </span>
+          <div className="ei-panel-titles">
             <h3>Experience Index</h3>
-            <p className="ei-hint">
-              {scopes.length === 0
-                ? '还没有索引任何目录'
-                : `${scopes.length} 个目录 · ${totalEntries} 条${staleCount > 0 ? ` · ${staleCount} 个可能过期` : ''}`}
-            </p>
+            <p>其它 agent 留下的经验文档索引</p>
           </div>
-          <button type="button" className="ei-close" aria-label="关闭" onClick={onClose}>×</button>
+          <button type="button" className="ei-icon-btn" aria-label="关闭" onClick={onClose}>×</button>
         </header>
 
         {error !== '' && <div className="ei-alert" role="alert">{error}</div>}
 
-        <section className="ei-dialog-current">
-          <div className="ei-dialog-label">
-            <span>当前目录</span>
+        <div className="ei-stats">
+          <Stat value={scopes.length} label="已索引目录" />
+          <Stat value={totalEntries} label="可参考条目" />
+          <Stat value={staleCount} label="可能过期" tone={staleCount > 0 ? 'warn' : undefined} />
+        </div>
+
+        <section className="ei-card">
+          <div className="ei-row-between">
+            <span className="ei-label">当前目录</span>
             <StatusBadge scope={currentScope} />
           </div>
-          <code className="ei-path" title={currentRoot ?? ''}>{currentRoot ?? '未知'}</code>
-          {currentScope !== null && (
-            <p className="ei-hint">
-              {currentScope.stats.total} 条{summaryOf(currentScope.stats) === '' ? '' : ` · ${summaryOf(currentScope.stats)}`}
-              {' · '}索引于 {formatTime(currentScope.indexedAt)}
-            </p>
+          <div className="ei-path-line" title={currentRoot ?? ''}>
+            {currentRoot ?? '未识别当前工作区'}
+          </div>
+          {currentScope !== null ? (
+            <div className="ei-meta">
+              {currentScope.stats.total} 条
+              {summaryOf(currentScope.stats) === '' ? '' : ` · ${summaryOf(currentScope.stats)}`}
+              {' · '}索引于 {formatDate(currentScope.indexedAt)}
+            </div>
+          ) : (
+            <div className="ei-meta">还没有索引这个目录，模型目前看不到它的历史经验。</div>
           )}
           <button
             type="button"
-            className="ei-primary"
+            className="ei-primary ei-block"
             disabled={currentRoot === null || busy !== ''}
-            onClick={() => void run('index', currentRoot)}
+            onClick={() => void run(currentRoot)}
           >
-            {busy === currentRoot ? '索引中…' : currentScope === null ? '建立索引' : '重建索引'}
+            {busy === currentRoot ? '正在索引…' : currentScope === null ? '为当前目录建立索引' : '重建索引'}
           </button>
         </section>
 
-        {visible.length > 0 && (
-          <section className="ei-dialog-list">
-            <div className="ei-dialog-label"><span>已索引目录</span></div>
-            <ul>
+        <section className="ei-card ei-card--plain">
+          <div className="ei-row-between">
+            <span className="ei-label">已索引目录</span>
+            {scopes.length > 0 && <span className="ei-count">{scopes.length}</span>}
+          </div>
+          {loading && state === null && <p className="ei-hint">读取中…</p>}
+          {!loading && scopes.length === 0 && (
+            <div className="ei-empty-state">
+              <p>还没有索引任何目录。</p>
+              <p className="ei-hint">索引后，新会话会在上下文里收到一份"这里有什么"的路标。</p>
+            </div>
+          )}
+          {scopes.length > 0 && (
+            <ul className="ei-scope-list">
               {visible.map(scope => (
-                <li key={scope.root}>
-                  <div className="ei-dialog-row">
-                    <span className="ei-dialog-name" title={scope.root}>{tailOf(scope.root)}</span>
-                    <StatusBadge scope={scope} />
-                    <span className="ei-num">{scope.stats.total}</span>
-                    <span className="ei-time">{formatTime(scope.indexedAt)}</span>
-                    <button
-                      type="button"
-                      disabled={busy !== ''}
-                      onClick={() => void run('index', scope.root)}
-                    >
-                      {busy === scope.root ? '…' : '重建'}
-                    </button>
+                <li key={scope.root} className={scope.root === currentRoot ? 'is-current' : undefined}>
+                  <div className="ei-scope-main">
+                    <div className="ei-scope-name">
+                      {tailOf(scope.root)}
+                      {scope.root === currentRoot && <span className="ei-dot-current" title="当前目录" />}
+                    </div>
+                    <div className="ei-scope-meta">
+                      {scope.stats.total} 条 · {formatDate(scope.indexedAt)}
+                    </div>
                   </div>
+                  <StatusBadge scope={scope} />
+                  <button
+                    type="button"
+                    className="ei-ghost"
+                    disabled={busy !== ''}
+                    onClick={() => void run(scope.root)}
+                  >
+                    {busy === scope.root ? '…' : '重建'}
+                  </button>
                 </li>
               ))}
             </ul>
-            {scopes.length > visible.length && (
-              <p className="ei-hint">还有 {scopes.length - visible.length} 个目录，可在设置页查看。</p>
-            )}
-          </section>
-        )}
+          )}
+          {scopes.length > visible.length && (
+            <p className="ei-hint">还有 {scopes.length - visible.length} 个目录，在设置页查看。</p>
+          )}
+        </section>
 
-        <footer className="ei-dialog-foot">
-          完整操作（添加任意目录、排除、移除、查看条目）在 Settings → Experience Index。
+        <footer className="ei-panel-foot">
+          添加任意目录、排除、移除、查看条目：Settings → Experience Index
         </footer>
       </div>
     </dialog>

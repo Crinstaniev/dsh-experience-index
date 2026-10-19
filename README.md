@@ -96,7 +96,7 @@ dsh plugin --profile desktop add link:/absolute/path/to/dsh-experience-index
 
 有三个：
 
-1. **输入框右侧的指南针按钮** —— 弹出汇总面板：目录数、条目数、过期数、当前目录状态，可一键建立/重建索引
+1. **输入框右侧的指南针按钮** —— 弹出汇总面板：目录数、条目数、过期数、当前目录状态，可一键建立/重建索引。面板按**当前会话**解析目录，切换对话会跟着切换
 2. **Settings → Experience Index** —— 顶层设置页，管理所有 scope
 3. **聊天里输入 `/experience`** —— 直接为当前目录建立索引；也可以 `/experience /path/to/dir`
 

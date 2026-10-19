@@ -306,7 +306,7 @@ function CompassIcon() {
 }
 
 /** Composer button: one click from the conversation to the summary panel. */
-function Trigger() {
+function Trigger({ sessionId }) {
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -320,7 +320,7 @@ function Trigger() {
       >
         <CompassIcon />
       </button>
-      <ExperiencePanel open={open} onClose={() => setOpen(false)} />
+      <ExperiencePanel open={open} onClose={() => setOpen(false)} sessionId={sessionId} />
     </>
   )
 }
@@ -335,6 +335,9 @@ export function apply(ctx) {
         name: 'conversation.input.right',
         id: 'experience-index-trigger',
         order: 50,
+        // Session-scoped slot: forward the session so the panel follows the
+        // conversation instead of the last touched workspace.
+        inject: sessionId => ({ sessionId }),
       },
       Trigger,
     ),

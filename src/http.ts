@@ -43,7 +43,24 @@ function stringField(input: Record<string, unknown>, key: string): string {
   return value
 }
 
-/** The most recently updated workspace, used to pre-fill the index form. */
+/** The workspace that owns a session, so the panel follows the open conversation. */
+export function workspaceForSession(ctx: Context, sessionId: string | null): string | null {
+  if (sessionId === null || sessionId === '') return null
+  try {
+    const registry = (ctx as unknown as { get?: (name: string) => unknown }).get?.('workspaceRegistry') as
+      | { list?: () => Array<{ path?: unknown; sessionIds?: unknown }> }
+      | undefined
+    for (const record of registry?.list?.() ?? []) {
+      const ids = Array.isArray(record.sessionIds) ? record.sessionIds : []
+      if (typeof record.path === 'string' && ids.includes(sessionId)) return record.path
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+/** The most recently updated workspace, used when no session is known. */
 function recentWorkspace(ctx: Context): string | null {
   try {
     const registry = (ctx as unknown as { get?: (name: string) => unknown }).get?.('workspaceRegistry') as
@@ -67,7 +84,9 @@ async function dispatch(
     if (url.pathname === `${PREFIX}/state`) {
       const scopes = await service.list()
       const requested = url.searchParams.get('root')
-      return json({ scopes, currentRoot: requested ?? recentWorkspace(ctx) })
+      const sessionRoot = workspaceForSession(ctx, url.searchParams.get('sessionId'))
+      const currentRoot = requested ?? sessionRoot ?? recentWorkspace(ctx)
+      return json({ scopes, currentRoot, followedSession: sessionRoot !== null })
     }
 
     if (url.pathname === `${PREFIX}/entries`) {
