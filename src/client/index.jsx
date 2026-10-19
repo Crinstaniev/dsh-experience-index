@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { ExperiencePanel } from './panel.jsx'
 import './style.css'
 
 const API = '/api/experience-index'
@@ -295,10 +296,49 @@ function Index() {
   )
 }
 
+function CompassIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.1" />
+      <path d="M10.3 5.7 8.9 8.9 5.7 10.3 7.1 7.1z" />
+    </svg>
+  )
+}
+
+/** Composer button: one click from the conversation to the summary panel. */
+function Trigger() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        className="ei-trigger"
+        title="Experience Index"
+        aria-label="Experience Index"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(value => !value)}
+      >
+        <CompassIcon />
+      </button>
+      <ExperiencePanel open={open} onClose={() => setOpen(false)} />
+    </>
+  )
+}
+
 export const inject = ['slots']
 export function apply(ctx) {
-  // A top-level Settings page is the discoverable entry; the `/experience`
-  // command on the host side is the in-chat one.
+  // Three entries: the composer button (fastest), the top-level Settings page
+  // (full management), and the `/experience` command on the host side.
+  ctx.slots.inject('conversation.input.right', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.input.right',
+        id: 'experience-index',
+        order: 50,
+      },
+      Trigger,
+    ),
+  )
   ctx.slots.inject('settings.section', () =>
     ctx.slots.register(
       {
