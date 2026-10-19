@@ -55,6 +55,20 @@ export type ResolveOutcome =
   | { kind: 'hint'; text: string; root: string; detected: string[] }
   | { kind: 'none'; root: string }
 
+const SUMMARY_ORDER = ['rule', 'runbook', 'design', 'analysis', 'note', 'state', 'log']
+
+/** One-line summary of an indexed scope, used by the `/experience` command. */
+export function describeScope(scope: ScopeRecord): string {
+  const parts: string[] = []
+  for (const category of SUMMARY_ORDER) {
+    const count = scope.stats.byCategory[category]
+    if (count !== undefined && count > 0) parts.push(`${category} ${count}`)
+  }
+  const total = `${scope.stats.total} file${scope.stats.total === 1 ? '' : 's'}`
+  const breakdown = parts.length === 0 ? 'no reference material' : parts.join(' · ')
+  return `${total} · ${breakdown}`
+}
+
 const HINT_FRAME_OPEN = '<system-reminder>'
 const HINT_FRAME_CLOSE = '</system-reminder>'
 

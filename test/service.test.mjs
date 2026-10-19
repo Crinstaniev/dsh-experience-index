@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 import { resolveConfig } from '../lib/config.js'
-import { ExperienceIndexService } from '../lib/service.js'
+import { describeScope, ExperienceIndexService } from '../lib/service.js'
 
 /** Minimal in-memory stand-in for a storage-domain handle. */
 function memoryDomain() {
@@ -185,4 +185,25 @@ test('a nested scope in a linked worktree is seeded from its main counterpart', 
   } finally {
     await rm(base, { recursive: true, force: true })
   }
+})
+
+test('describeScope summarizes counts for the command result', () => {
+  const scope = {
+    root: '/tmp/example',
+    name: 'example',
+    repoRoot: null,
+    mainRepoRoot: null,
+    relToRepo: null,
+    state: 'indexed',
+    indexedAt: 0,
+    indexerVersion: 1,
+    origin: null,
+    fingerprint: { files: [], dirs: [] },
+    ignoreDigest: '',
+    stats: { total: 6, byCategory: { runbook: 2, rule: 1, log: 3 }, aggregates: [] },
+  }
+  assert.equal(describeScope(scope), '6 files · rule 1 · runbook 2 · log 3')
+
+  const empty = { ...scope, stats: { total: 0, byCategory: {}, aggregates: [] } }
+  assert.equal(describeScope(empty), '0 files · no reference material')
 })

@@ -90,8 +90,23 @@ npm run build
 dsh plugin --profile desktop add link:/absolute/path/to/dsh-experience-index
 ```
 
-`lib/` 是构建产物，不随仓库提交，所以安装前必须先 build。装好后重启 DSH，进入
-**Settings → Plugins → Experience Index**：
+`lib/` 是构建产物，不随仓库提交，所以安装前必须先 build。装好后重启 DSH。
+
+### 入口
+
+有两个：
+
+1. **Settings → Experience Index** —— 顶层设置页，管理所有 scope
+2. **聊天里输入 `/experience`** —— 直接为当前目录建立索引；也可以 `/experience /path/to/dir`
+
+`/experience` 默认作用于会话当前工作目录，返回一行结果：
+
+```
+Indexed /path/to/services/api — 45 files · runbook 2 · log 42.
+The next session in this directory receives the signpost.
+```
+
+设置页里可以：
 
 - **当前目录**：显示会话所在工作区的索引状态，`建立索引` / `重建索引`
 - **为任意目录建立索引**：输入绝对路径，可直接索引子项目或非 git 目录

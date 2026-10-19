@@ -297,8 +297,18 @@ function Index() {
 
 export const inject = ['slots']
 export function apply(ctx) {
-  ctx.slots.inject('plugins.bundle.config', () =>
-    ctx.slots.register({ name: 'plugins.bundle.config', key: ENTRY }, () => <Index />),
+  // A top-level Settings page is the discoverable entry; the `/experience`
+  // command on the host side is the in-chat one.
+  ctx.slots.inject('settings.section', () =>
+    ctx.slots.register(
+      {
+        name: 'settings.section',
+        id: 'experience-index',
+        order: 16,
+        label: () => 'Experience Index',
+      },
+      Index,
+    ),
   )
 }
 export default { name: ENTRY, inject, apply }

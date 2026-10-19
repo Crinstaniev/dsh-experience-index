@@ -15,12 +15,13 @@
  *
  * @module dsh-experience-index
  */
+import { isAbsolute, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Config as ConfigSchema, resolveConfig } from './config.js'
 import { experienceDomain } from './domain.js'
 import { defaultDshHome } from './ignore.js'
-import { ExperienceIndexService, type DomainHandle } from './service.js'
+import { describeScope, ExperienceIndexService, type DomainHandle } from './service.js'
 import { registerHttp } from './http.js'
 
 export const name = 'dsh-experience-index'
@@ -126,5 +127,45 @@ export async function apply(ctx: Context, config: unknown): Promise<void> {
 
   ctx.inject(['connection'], connectionCtx => {
     registerHttp(connectionCtx, service)
+  })
+
+  // `/experience [directory]` is the in-chat entry point: index the working
+  // directory, or an explicit path, without opening Settings.
+  ctx.inject(['commands'], commandCtx => {
+    // `commands` reaches the client through a module augmentation this package
+    // does not depend on, so the registry is addressed structurally.
+    const commands = (commandCtx as unknown as {
+      commands: { register: (definition: unknown) => void }
+    }).commands
+    commands.register({
+      name: 'experience',
+      description: 'Index experience files left by earlier agent sessions',
+      input: { hint: '[directory]' },
+      handler: async ({ agent, rawInput, signal }: {
+        agent: unknown
+        rawInput: string
+        signal: AbortSignal
+      }) => {
+        try {
+          const cwd = await (
+            ctx as unknown as {
+              workingDirectory: { ensure: (agent: unknown, signal: AbortSignal) => Promise<string> }
+            }
+          ).workingDirectory.ensure(agent, signal)
+          const argument = rawInput.trim().split(/\s+/)[0] ?? ''
+          const target = argument === '' ? cwd : isAbsolute(argument) ? argument : resolve(cwd, argument)
+          const scope = await service.indexDirectory(target)
+          return {
+            kind: 'success' as const,
+            text: `Indexed ${scope.root} — ${describeScope(scope)}. The next session in this directory receives the signpost.`,
+          }
+        } catch (error) {
+          return {
+            kind: 'error' as const,
+            text: `/experience: ${error instanceof Error ? error.message : String(error)}`,
+          }
+        }
+      },
+    })
   })
 }
